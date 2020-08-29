@@ -167,8 +167,17 @@ class BaseJob(TimeStampedModel):
     is_scheduled.boolean = True
 
     def save(self, **kwargs):
+        performed_initial_save = False
+        if self.pk is None and not isinstance(self, ScheduledJob):
+            super(BaseJob, self).save(**kwargs)
+            performed_initial_save = True
         self.schedule()
-        super(BaseJob, self).save(**kwargs)
+        final_save_kwargs = {**kwargs}
+        if performed_initial_save:
+            final_save_kwargs = {**kwargs, "force_update": True}
+        else:
+            final_save_kwargs = kwargs
+        super(BaseJob, self).save(**final_save_kwargs)
 
     def delete(self, **kwargs):
         self.unschedule()
@@ -329,6 +338,7 @@ class RepeatableJob(ScheduledTimeMixin, BaseJob):
             repeat=self.repeat,
             args=self.parse_args(),
             kwargs=self.parse_kwargs(),
+            id=self.get_fixed_id(),
         )
         if self.timeout:
             kwargs['timeout'] = self.timeout
@@ -346,6 +356,10 @@ class RepeatableJob(ScheduledTimeMixin, BaseJob):
         verbose_name = _('Repeatable Job')
         verbose_name_plural = _('Repeatable Jobs')
         ordering = ('name', )
+
+    def get_fixed_id(self) -> str:
+        assert self.pk is not None and isinstance(self.pk, int)
+        return FIXED_JOB_ID_MAPPING[self.__class__].format(pk=self.pk)
 
 
 class CronJob(BaseJob):
@@ -377,6 +391,7 @@ class CronJob(BaseJob):
             repeat=self.repeat,
             args=self.parse_args(),
             kwargs=self.parse_kwargs(),
+            id=self.get_fixed_id(),
         )
         if self.timeout:
             kwargs['timeout'] = self.timeout
@@ -392,3 +407,13 @@ class CronJob(BaseJob):
         verbose_name = _('Cron Job')
         verbose_name_plural = _('Cron Jobs')
         ordering = ('name', )
+
+    def get_fixed_id(self) -> str:
+        assert self.pk is not None and isinstance(self.pk, int)
+        return FIXED_JOB_ID_MAPPING[self.__class__].format(pk=self.pk)
+
+
+FIXED_JOB_ID_MAPPING = {
+    CronJob: "django-rq-scheduler:cron-job:{pk}",
+    RepeatableJob: "django-rq-scheduler:repeatable-job:{pk}",
+}
