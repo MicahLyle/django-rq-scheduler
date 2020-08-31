@@ -172,9 +172,8 @@ class BaseJob(TimeStampedModel):
             super(BaseJob, self).save(**kwargs)
             performed_initial_save = True
         self.schedule()
-        final_save_kwargs = {**kwargs}
         if performed_initial_save:
-            final_save_kwargs = {**kwargs, "force_update": True}
+            final_save_kwargs = {**kwargs, "force_insert": False, "force_update": True}
         else:
             final_save_kwargs = kwargs
         super(BaseJob, self).save(**final_save_kwargs)
